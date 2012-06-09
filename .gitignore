@@ -1,0 +1,14 @@
+*.o
+.*.swp
+
+# programs
+splay
+
+# test output directory
+test/Output
+
+# ctags
+tags
+
+# local makefile
+local.mk
