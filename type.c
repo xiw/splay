@@ -47,6 +47,24 @@ static type_t emit_type_begin(struct symbol *sym)
 		return LLVMStructCreateNamed(LLVMGetGlobalContext(), buf);
 	}
 
+	if (sym->type == SYM_UNION) {
+		const char *prefix = "union.";
+		const char *name = sym->ident ? show_ident(sym->ident) : "anno";
+		char buf[strlen(name) + strlen(prefix) + 1];
+		type_t type;
+
+		strcpy(buf, prefix);
+		strcat(buf, name);
+		type = LLVMStructCreateNamed(LLVMGetGlobalContext(), buf);
+		// Fill in union body if it is defined.
+		if (sym->bit_size) {
+			type_t elem_type = LLVMIntType(sym->bit_size);
+
+			LLVMStructSetBody(type, &elem_type, 1, 0);
+		}
+		return type;
+	}
+
 	if (sym->type == SYM_FN) {
 		struct symbol *arg;
 		int n = symbol_list_size(sym->arguments), i;
