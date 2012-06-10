@@ -157,12 +157,30 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 	if (is_floating_point_type(type)) {
 		return LLVMBuildBinOp(builder, fops[opcode], lhs, rhs, "");
 	} else {
+		type_t lhs_type = LLVMTypeOf(lhs);
+		type_t rhs_type = LLVMTypeOf(rhs);
 		value_t v;
 
-		if (is_pointer_type(LLVMTypeOf(lhs)))
-			lhs = build_ptrtoint(builder, lhs);
-		if (is_pointer_type(LLVMTypeOf(rhs)))
-			rhs = build_ptrtoint(builder, rhs);
+		if (is_pointer_type(rhs_type)) {
+			swap(lhs, rhs);
+			swap(lhs_type, rhs_type);
+		}
+		assert(is_integer_type(rhs_type, 0));
+		// Emit GEP for p + n and p - n.
+		if (is_pointer_type(lhs_type)) {
+			type_t charp = LLVMPointerType(LLVMInt8Type(), 0);
+
+			lhs = LLVMBuildPointerCast(builder, lhs, charp, "");
+			switch (opcode) {
+			default: assert(0 && "Unknown pointer operation!");
+			case OP_SUB: rhs = LLVMBuildNeg(builder, rhs, "");
+			case OP_ADD: break;
+			}
+			v = LLVMBuildGEP(builder, lhs, &rhs, 1, "");
+			assert(is_pointer_type(type));
+			return LLVMBuildPointerCast(builder, v, type, "");
+		}
+		assert(is_integer_type(lhs_type, 0));
 		// For x << y, y may not be the same type of x.
 		// Truncate or zero-extend y.
 		rhs = build_integer_cast(builder, rhs, LLVMTypeOf(lhs), 0);
@@ -176,11 +194,6 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 		case OP_MULS: case OP_DIVS: case OP_MODS: case OP_SHL:
 			set_no_signed_wrap(v);
 			break;
-		}
-
-		if (is_pointer_type(type)) {
-			set_no_unsigned_wrap(v);
-			v = build_inttoptr(builder, v, type);
 		}
 		return v;
 	}

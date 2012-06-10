@@ -102,7 +102,11 @@ void print_module(module_t m, int fd)
 
 int is_integer_type(type_t type, unsigned nbits)
 {
-	return llvm::unwrap(type)->isIntegerTy(nbits);
+	llvm::Type *ty = llvm::unwrap(type);
+
+	if (nbits == 0)
+		return ty->isIntegerTy();
+	return ty->isIntegerTy(nbits);
 }
 
 int is_floating_point_type(type_t type)
