@@ -331,13 +331,22 @@ static value_t emit_cast(builder_t builder, struct instruction *insn)
 static LLVMValueRef emit_call(builder_t builder, struct instruction *insn)
 {
 	int n = pseudo_list_size(insn->arguments), i;
+	value_t args[n];
+	value_t func = emit_pseudo(insn->func);
+	type_t func_type = get_function_type(func);
+	int nparams = LLVMCountParamTypes(func_type);
+	type_t param_types[nparams];
 	struct pseudo *arg;
-	value_t func, args[n];
 
-	func = emit_pseudo(insn->func);
+	LLVMGetParamTypes(func_type, param_types);
 	i = 0;
 	FOR_EACH_PTR(insn->arguments, arg) {
-		args[i++] = emit_pseudo(arg);
+		value_t v = emit_pseudo(arg);
+
+		// Cast pointer argument type.
+		if (i < nparams && is_pointer_type(LLVMTypeOf(v)))
+			v = build_pointer_cast(builder, v, param_types[i]);
+		args[i++] = v;
 	} END_FOR_EACH_PTR(arg);
 	return LLVMBuildCall(builder, func, args, n, "");
 }
