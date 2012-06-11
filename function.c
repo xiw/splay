@@ -191,7 +191,7 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 			if (!(ctype->ctype.modifiers & MOD_SIGNED))
 				break;
 			// Fall through.
-		case OP_MULS: case OP_DIVS: case OP_MODS: case OP_SHL:
+		case OP_MULS: case OP_SHL:
 			set_no_signed_wrap(v);
 			break;
 		}
