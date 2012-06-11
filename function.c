@@ -245,16 +245,6 @@ static value_t emit_cmp(builder_t builder, struct instruction *insn)
 		return LLVMBuildICmp(builder, iops[opcode], lhs, rhs, "");
 }
 
-static value_t emit_not(builder_t builder, struct instruction *insn)
-{
-	type_t type = emit_type(insn->target->ctype);
-	value_t v = emit_pseudo(insn->src1);
-	value_t mask = LLVMConstAllOnes(type);
-
-	assert(type == LLVMTypeOf(v));
-	return LLVMBuildXor(builder, v, mask, "");
-}
-
 static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offset, struct pseudo *dst)
 {
 	type_t charp = LLVMPointerType(LLVMInt8Type(), 0);
@@ -371,7 +361,9 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_BINCMP ... OP_BINCMP_END:
 		return emit_cmp(builder, insn);
 	case OP_NOT:
-		return emit_not(builder, insn);
+		return LLVMBuildNot(builder, emit_pseudo(insn->src1), "");
+	case OP_NEG:
+		return LLVMBuildNeg(builder, emit_pseudo(insn->src1), "");
 	case OP_SEL:
 		return LLVMBuildSelect(builder, emit_pseudo(insn->src1), emit_pseudo(insn->src2), emit_pseudo(insn->src3), "");
 	case OP_LOAD:
