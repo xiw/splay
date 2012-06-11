@@ -108,6 +108,32 @@ static void emit_br(builder_t builder, struct instruction *insn)
 	}
 }
 
+static void emit_switch(builder_t builder, struct instruction *insn)
+{
+	struct multijmp *jmp, *def = NULL;
+	unsigned int n = 0;
+	value_t cond = emit_pseudo(insn->cond);
+	value_t v;
+
+	FOR_EACH_PTR(insn->multijmp_list, jmp) {
+		if (jmp->begin <= jmp->end)
+			++n;
+		else
+			def = jmp;
+	} END_FOR_EACH_PTR(jmp);
+
+	assert(jmp && "Missing default in switch!");
+	v = LLVMBuildSwitch(builder, cond, blockof(def->target), n);
+
+	FOR_EACH_PTR(insn->multijmp_list, jmp) {
+		long long begin = jmp->begin, end = jmp->end;
+		block_t blk = blockof(jmp->target);
+
+		if (begin <= end)
+			add_switch_cases(v, begin, end, blk);
+	} END_FOR_EACH_PTR(jmp);
+}
+
 static value_t emit_binop(builder_t builder, struct instruction *insn)
 {
 	static const LLVMOpcode iops[] = {
@@ -370,6 +396,9 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 		break;
 	case OP_BR:
 		emit_br(builder, insn);
+		break;
+	case OP_SWITCH:
+		emit_switch(builder, insn);
 		break;
 	case OP_BINARY ... OP_BINARY_END:
 		return emit_binop(builder, insn);

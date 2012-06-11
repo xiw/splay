@@ -13,7 +13,7 @@
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/Verifier.h>
 #include <llvm/Support/Host.h>
-#include <llvm/Support/InstIterator.h>
+#include <llvm/Support/IntegersSubset.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/SSAUpdater.h>
 #include <assert.h>
@@ -203,4 +203,17 @@ value_t build_integer_cast(builder_t builder, value_t src, type_t type, int is_s
 {
 	return llvm::wrap(llvm::unwrap(builder)->CreateIntCast(
 		llvm::unwrap(src), llvm::unwrap(type), is_signed, ""));
+}
+
+void add_switch_cases(value_t v, long long begin, long long end, block_t blk)
+{
+	llvm::SwitchInst *i = llvm::unwrap<llvm::SwitchInst>(v);
+	llvm::IntegerType *ty = llvm::cast<llvm::IntegerType>(i->getCondition()->getType());
+	llvm::IntegersSubset::Range range(
+		llvm::IntItem::fromConstantInt(llvm::ConstantInt::get(ty, begin)),
+		llvm::IntItem::fromConstantInt(llvm::ConstantInt::get(ty, end))
+	);
+	llvm::IntegersSubset vals(llvm::makeArrayRef(range));
+
+	i->addCase(vals, llvm::unwrap(blk));
 }

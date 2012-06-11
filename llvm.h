@@ -85,6 +85,8 @@ static inline value_t build_is_not_null(builder_t builder, value_t v)
 	return LLVMBuildIsNotNull(builder, v, "");
 }
 
+void add_switch_cases(value_t v, long long begin, long long end, block_t blk);
+
 #ifdef __cplusplus
 }
 #endif
