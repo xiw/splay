@@ -282,7 +282,7 @@ static value_t emit_select(builder_t builder, struct instruction *insn)
 	return LLVMBuildSelect(builder, cond, true_val, false_val, "");
 }
 
-static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offset, struct pseudo *dst)
+static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offset, type_t type)
 {
 	value_t ptr = emit_pseudo(src);
 	unsigned as = LLVMGetPointerAddressSpace(LLVMTypeOf(ptr));
@@ -290,9 +290,27 @@ static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offs
 	value_t base = build_pointer_cast(builder, ptr, bytep);
 	value_t idx = LLVMConstInt(LLVMIntType(bits_in_pointer), offset, 0);
 	value_t gep = LLVMBuildGEP(builder, base, &idx, 1, "");
-	type_t type = LLVMPointerType(emit_type(dst->ctype), as);
 
-	return build_pointer_cast(builder, gep, type);
+	return build_pointer_cast(builder, gep, LLVMPointerType(type, as));
+}
+
+static value_t emit_load(builder_t builder, struct instruction *insn)
+{
+	type_t type = emit_type(insn->target->ctype);
+	value_t ptr = emit_gep(builder, insn->src, insn->offset, type);
+
+	return LLVMBuildLoad(builder, ptr, "");
+}
+
+static void emit_store(builder_t builder, struct instruction *insn)
+{
+	value_t v = emit_pseudo(insn->target);
+	// The type could be different from emit_type(insn->target->ctype),
+	// for example, given str = "".
+	type_t type = LLVMTypeOf(v);
+	value_t ptr = emit_gep(builder, insn->src, insn->offset, type);
+
+	LLVMBuildStore(builder, v, ptr);
 }
 
 // LLVM's phi requires one entry for each predecessor.  It is difficult
@@ -414,9 +432,9 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_SEL:
 		return emit_select(builder, insn);
 	case OP_LOAD:
-		return LLVMBuildLoad(builder, emit_gep(builder, insn->src, insn->offset, insn->target), "");
+		return emit_load(builder, insn);
 	case OP_STORE:
-		LLVMBuildStore(builder, emit_pseudo(insn->target), emit_gep(builder, insn->src, insn->offset, insn->target));
+		emit_store(builder, insn);
 		break;
 	case OP_PHI:
 		return emit_phi(builder, insn);
