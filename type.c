@@ -27,7 +27,7 @@ static type_t emit_type_begin(struct symbol *sym)
 		// Fix up void * to i8 *.
 		if (LLVMGetTypeKind(elem_type) == LLVMVoidTypeKind)
 			elem_type = LLVMInt8Type();
-		return LLVMPointerType(elem_type, 0);
+		return LLVMPointerType(elem_type, sym->ctype.as);
 	}
 
 	if (sym->type == SYM_ARRAY) {
