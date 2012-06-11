@@ -319,10 +319,15 @@ static void emit_phisrc(builder_t builder, struct instruction *insn)
 static value_t emit_cast(builder_t builder, struct instruction *insn)
 {
 	value_t src = emit_pseudo(insn->src);
-	type_t orig_type = LLVMTypeOf(src);
-	type_t type = emit_type(insn->target->ctype);
+	type_t orig_type, type;
 	value_t v;
 
+	// Converting to _Bool needs a zero test rather than a truncation.
+	if (is_bool_type(insn->target->ctype))
+		return build_is_not_null(builder, src);
+
+	orig_type = LLVMTypeOf(src);
+	type = emit_type(insn->target->ctype);
 	if (is_pointer_type(type)) {
 		if (is_pointer_type(orig_type))
 			return LLVMBuildPointerCast(builder, src, type, "");
