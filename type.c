@@ -70,7 +70,11 @@ static type_t emit_type_begin(struct symbol *sym)
 		int n = symbol_list_size(sym->arguments), i;
 		type_t ret_type, arg_types[n];
 
-		ret_type = emit_type(base_type);
+		// Return type default to int.
+		if (base_type == &incomplete_ctype)
+			ret_type = emit_type(&int_ctype);
+		else
+			ret_type = emit_type(base_type);
 		i = 0;
 		FOR_EACH_PTR(sym->arguments, arg) {
 			arg_types[i++] = emit_type(arg->ctype.base_type);
