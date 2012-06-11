@@ -252,6 +252,16 @@ static value_t emit_cmp(builder_t builder, struct instruction *insn)
 	return build_integer_cast(builder, v, type, 0);
 }
 
+static value_t emit_select(builder_t builder, struct instruction *insn)
+{
+	value_t cond, true_val, false_val;
+
+	cond = build_is_not_null(builder, emit_pseudo(insn->src1));
+	true_val = emit_pseudo(insn->src2);
+	false_val = emit_pseudo(insn->src3);
+	return LLVMBuildSelect(builder, cond, true_val, false_val, "");
+}
+
 static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offset, struct pseudo *dst)
 {
 	type_t charp = LLVMPointerType(LLVMInt8Type(), 0);
@@ -372,7 +382,7 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_NEG:
 		return LLVMBuildNeg(builder, emit_pseudo(insn->src1), "");
 	case OP_SEL:
-		return LLVMBuildSelect(builder, emit_pseudo(insn->src1), emit_pseudo(insn->src2), emit_pseudo(insn->src3), "");
+		return emit_select(builder, insn);
 	case OP_LOAD:
 		return LLVMBuildLoad(builder, emit_gep(builder, insn->src, insn->offset, insn->target), "");
 	case OP_STORE:
