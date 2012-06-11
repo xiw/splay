@@ -56,6 +56,11 @@ void set_no_unsigned_wrap(value_t binop);
 // Create integer/pointer/vector.
 value_t get_integer_value(type_t type, long long value);
 
+static inline value_t get_block_address(block_t blk)
+{
+	return LLVMBlockAddress(LLVMGetBasicBlockParent(blk), blk);
+}
+
 value_t resize_constant_array(value_t v, unsigned int size);
 
 value_t build_integer_cast(builder_t builder, value_t src, type_t type, int is_signed);

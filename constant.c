@@ -1,10 +1,9 @@
 #include "lib.h"
 #include "sparse/expression.h"
+#include "sparse/linearize.h"
 #include "sparse/parse.h"
 #include "sparse/symbol.h"
 #include <assert.h>
-
-static value_t emit_constant(module_t m, struct expression *expr);
 
 static value_t emit_function_declaration(module_t m, struct symbol *sym)
 {
@@ -110,7 +109,7 @@ static value_t emit_string(struct expression *expr) {
 	return LLVMConstString(expr->string->data, expr->string->length, 1); 
 }
 
-static value_t emit_constant(module_t m, struct expression *expr)
+value_t emit_constant(module_t m, struct expression *expr)
 {
 	type_t type = emit_type(expr->ctype);
 
@@ -141,9 +140,17 @@ static value_t emit_constant(module_t m, struct expression *expr)
 	if (expr->type == EXPR_PREOP) {
 		if (expr->op == '*' && expr->unop->type == EXPR_SYMBOL) {
 			struct expression *initializer = expr->unop->symbol->initializer;
+
 			if (initializer)
 				return emit_constant(m, initializer);
 		}
+	}
+
+	if (expr->type == EXPR_LABEL) {
+		block_t blk = expr->symbol->bb_target->priv;
+
+		assert(blk && "Basic blocks should have been visited!");
+		return get_block_address(blk);
 	}
 
 	show_expression(expr);

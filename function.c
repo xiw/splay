@@ -134,6 +134,18 @@ static void emit_switch(builder_t builder, struct instruction *insn)
 	} END_FOR_EACH_PTR(jmp);
 }
 
+static void emit_indirectbr(builder_t builder, struct instruction *insn)
+{
+	value_t addr = emit_pseudo(insn->target);
+	int n = ptr_list_size((struct ptr_list *)insn->multijmp_list);
+	value_t v = LLVMBuildIndirectBr(builder, addr, n);
+	struct multijmp *jmp;
+
+	FOR_EACH_PTR(insn->multijmp_list, jmp) {
+		LLVMAddDestination(v, blockof(jmp->target));
+	} END_FOR_EACH_PTR(jmp);
+}
+
 static value_t emit_binop(builder_t builder, struct instruction *insn)
 {
 	static const LLVMOpcode iops[] = {
@@ -421,6 +433,9 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_SWITCH:
 		emit_switch(builder, insn);
 		break;
+	case OP_COMPUTEDGOTO:
+		emit_indirectbr(builder, insn);
+		break;
 	case OP_BINARY ... OP_BINARY_END:
 		return emit_binop(builder, insn);
 	case OP_BINCMP ... OP_BINCMP_END:
@@ -436,6 +451,8 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_STORE:
 		emit_store(builder, insn);
 		break;
+	case OP_SETVAL:
+		return emit_constant(LLVMGetGlobalParent(function), insn->val);
 	case OP_PHI:
 		return emit_phi(builder, insn);
 	case OP_PHISOURCE:
