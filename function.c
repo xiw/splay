@@ -195,9 +195,10 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 		assert(is_integer_type(rhs_type, 0));
 		// Emit GEP for p + n and p - n.
 		if (is_pointer_type(lhs_type)) {
-			type_t charp = LLVMPointerType(LLVMInt8Type(), 0);
+			unsigned as = LLVMGetPointerAddressSpace(lhs_type);
+			type_t bytep = LLVMPointerType(LLVMInt8Type(), as);
 
-			lhs = LLVMBuildPointerCast(builder, lhs, charp, "");
+			lhs = build_pointer_cast(builder, lhs, bytep);
 			switch (opcode) {
 			default: assert(0 && "Unknown pointer operation!");
 			case OP_SUB: rhs = LLVMBuildNeg(builder, rhs, "");
@@ -205,7 +206,7 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 			}
 			v = LLVMBuildGEP(builder, lhs, &rhs, 1, "");
 			assert(is_pointer_type(type));
-			return LLVMBuildPointerCast(builder, v, type, "");
+			return build_pointer_cast(builder, v, type);
 		}
 		assert(is_integer_type(lhs_type, 0));
 		// For x << y, y may not be the same type of x.
@@ -283,13 +284,15 @@ static value_t emit_select(builder_t builder, struct instruction *insn)
 
 static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offset, struct pseudo *dst)
 {
-	type_t charp = LLVMPointerType(LLVMInt8Type(), 0);
-	value_t base = LLVMBuildPointerCast(builder, emit_pseudo(src), charp, "");
+	value_t ptr = emit_pseudo(src);
+	unsigned as = LLVMGetPointerAddressSpace(LLVMTypeOf(ptr));
+	type_t bytep = LLVMPointerType(LLVMInt8Type(), as);
+	value_t base = build_pointer_cast(builder, ptr, bytep);
 	value_t idx = LLVMConstInt(LLVMIntType(bits_in_pointer), offset, 0);
 	value_t gep = LLVMBuildGEP(builder, base, &idx, 1, "");
-	type_t type = LLVMPointerType(emit_type(dst->ctype), 0);
+	type_t type = LLVMPointerType(emit_type(dst->ctype), as);
 
-	return LLVMBuildPointerCast(builder, gep, type, "");
+	return build_pointer_cast(builder, gep, type);
 }
 
 // LLVM's phi requires one entry for each predecessor.  It is difficult
@@ -349,7 +352,7 @@ static value_t emit_cast(builder_t builder, struct instruction *insn)
 	type = emit_type(insn->target->ctype);
 	if (is_pointer_type(type)) {
 		if (is_pointer_type(orig_type))
-			return LLVMBuildPointerCast(builder, src, type, "");
+			return build_pointer_cast(builder, src, type);
 		return build_inttoptr(builder, src, type);
 	}
 	if (is_pointer_type(orig_type))
