@@ -223,33 +223,26 @@ static value_t emit_cmp(builder_t builder, struct instruction *insn)
 		[OP_SET_GT]	= LLVMRealOGT,
 	};
 	unsigned opcode = insn->opcode;
-	// insn->type is the type of the operands.
-	type_t type = emit_type(insn->target->ctype);
 	value_t lhs = emit_pseudo(insn->src1);
 	value_t rhs = emit_pseudo(insn->src2);
-	value_t v;
+	type_t type = LLVMTypeOf(lhs);
 
 	// This should only happen for p == 0 or p != 0.
-	if (LLVMTypeOf(lhs) != type) {
+	if (type != LLVMTypeOf(rhs)) {
 		assert(LLVMIsNull(rhs));
 		switch (opcode) {
 		default: assert(0 && "Illegal integer-pointer comparison!");
 		case OP_SET_EQ:
-			v = build_is_null(builder, lhs);
-			break;
+			return build_is_null(builder, lhs);
 		case OP_SET_NE:
-			v = build_is_not_null(builder, lhs);
-			break;
+			return build_is_not_null(builder, lhs);
 		}
-	} else {
-		assert(LLVMTypeOf(rhs) == type);
-		if (is_floating_point_type(type))
-			v = LLVMBuildFCmp(builder, fops[opcode], lhs, rhs, "");
-		else
-			v = LLVMBuildICmp(builder, iops[opcode], lhs, rhs, "");
 	}
-	// The return type could be something like i32.
-	return build_integer_cast(builder, v, type, 0);
+
+	if (is_floating_point_type(type))
+		return LLVMBuildFCmp(builder, fops[opcode], lhs, rhs, "");
+	else
+		return LLVMBuildICmp(builder, iops[opcode], lhs, rhs, "");
 }
 
 static value_t emit_select(builder_t builder, struct instruction *insn)
