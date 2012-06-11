@@ -47,11 +47,7 @@ value_t alloc_placeholder(type_t type, block_t blk);
 
 void free_placeholder(value_t ph, value_t v);
 
-value_t first_non_phi(block_t blk);
-
 void set_no_signed_wrap(value_t binop);
-
-void set_no_unsigned_wrap(value_t binop);
 
 // Create integer/pointer/vector.
 value_t get_integer_value(type_t type, long long value);
@@ -89,6 +85,8 @@ static inline value_t build_is_not_null(builder_t builder, value_t v)
 {
 	return LLVMBuildIsNotNull(builder, v, "");
 }
+
+value_t build_gep(builder_t builder, value_t base, value_t offset);
 
 void add_switch_cases(value_t v, long long begin, long long end, block_t blk);
 

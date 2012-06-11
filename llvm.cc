@@ -21,6 +21,9 @@
 // Forward declarations in sparse/lib.h.
 extern int bits_in_pointer;
 
+// TODO: move it to lib.
+int strict_overflow = 1;
+
 static const char *get_data_layout(const llvm::Triple &triple)
 {
 	static const char *I386_LINUX =
@@ -155,24 +158,10 @@ void free_placeholder(value_t ph, value_t v)
 	LLVMInstructionEraseFromParent(ph);
 }
 
-value_t first_non_phi(block_t blk)
-{
-	llvm::BasicBlock *bb = llvm::unwrap(blk);
-	llvm::Instruction *i = bb->getFirstNonPHI();
-
-	if (i == bb->end())
-		return NULL;
-	return llvm::wrap(i);
-}
-
 void set_no_signed_wrap(value_t binop)
 {
-	llvm::unwrap<llvm::BinaryOperator>(binop)->setHasNoSignedWrap();
-}
-
-void set_no_unsigned_wrap(value_t binop)
-{
-	llvm::unwrap<llvm::BinaryOperator>(binop)->setHasNoUnsignedWrap();
+	if (strict_overflow)
+		llvm::unwrap<llvm::BinaryOperator>(binop)->setHasNoSignedWrap();
 }
 
 value_t get_integer_value(type_t type, long long value)
@@ -203,6 +192,22 @@ value_t build_integer_cast(builder_t builder, value_t src, type_t type, int is_s
 {
 	return llvm::wrap(llvm::unwrap(builder)->CreateIntCast(
 		llvm::unwrap(src), llvm::unwrap(type), is_signed, ""));
+}
+
+value_t build_gep(builder_t builder, value_t base, value_t offset)
+{
+	type_t type = LLVMTypeOf(base);
+	unsigned int as = LLVMGetPointerAddressSpace(type);
+	type_t bytep = LLVMPointerType(LLVMInt8Type(), as);
+	value_t v;
+
+	// Cast to i8* first.
+	base = build_pointer_cast(builder, base, bytep);
+	v = LLVMBuildGEP(builder, base, &offset, 1, "");
+	if (strict_overflow && LLVMIsAGetElementPtrInst(v))
+		llvm::unwrap<llvm::GetElementPtrInst>(v)->setIsInBounds();
+	// Cast back to original pointer type.
+	return build_pointer_cast(builder, v, type);
 }
 
 void add_switch_cases(value_t v, long long begin, long long end, block_t blk)

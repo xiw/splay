@@ -177,66 +177,79 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 		[OP_MODS]	= LLVMFRem,
 	};
 	unsigned opcode = insn->opcode;
-	value_t lhs, rhs;
+	value_t v, lhs, rhs;
+	type_t type, lhs_type, rhs_type;
 	struct symbol *ctype = insn->target->ctype;
-	type_t type = emit_type(ctype);
+
+	type = emit_type(ctype);
+	lhs = emit_pseudo(insn->src1);
+	rhs = emit_pseudo(insn->src2);
 
 	// Reduce operands to 1 bit for logical operations.
 	if (opcode == OP_AND_BOOL || opcode == OP_OR_BOOL) {
 		// The return type should always be bool.
 		assert(is_integer_type(type, 1));
 		// lhs's and rhs's types are unknown.
-		lhs = build_is_not_null(builder, emit_pseudo(insn->src1));
-		rhs = build_is_not_null(builder, emit_pseudo(insn->src2));
-	} else {
-		lhs = emit_pseudo(insn->src1);
-		rhs = emit_pseudo(insn->src2);
+		lhs = build_is_not_null(builder, lhs);
+		rhs = build_is_not_null(builder, rhs);
+		return LLVMBuildBinOp(builder, iops[opcode], lhs, rhs, "");
 	}
 
-	if (is_floating_point_type(type)) {
+	if (is_floating_point_type(type))
 		return LLVMBuildBinOp(builder, fops[opcode], lhs, rhs, "");
-	} else {
-		type_t lhs_type = LLVMTypeOf(lhs);
-		type_t rhs_type = LLVMTypeOf(rhs);
-		value_t v;
 
-		if (is_pointer_type(rhs_type)) {
-			swap(lhs, rhs);
-			swap(lhs_type, rhs_type);
-		}
-		assert(is_integer_type(rhs_type, 0));
-		// Emit GEP for p + n and p - n.
-		if (is_pointer_type(lhs_type)) {
-			unsigned as = LLVMGetPointerAddressSpace(lhs_type);
-			type_t bytep = LLVMPointerType(LLVMInt8Type(), as);
+	lhs_type = LLVMTypeOf(lhs);
+	rhs_type = LLVMTypeOf(rhs);
 
-			lhs = build_pointer_cast(builder, lhs, bytep);
-			switch (opcode) {
-			default: assert(0 && "Unknown pointer operation!");
-			case OP_SUB: rhs = LLVMBuildNeg(builder, rhs, "");
-			case OP_ADD: break;
-			}
-			v = LLVMBuildGEP(builder, lhs, &rhs, 1, "");
-			assert(is_pointer_type(type));
-			return build_pointer_cast(builder, v, type);
-		}
-		assert(is_integer_type(lhs_type, 0));
-		// For x << y, y may not be the same type of x.
-		// Truncate or zero-extend y.
-		rhs = build_integer_cast(builder, rhs, LLVMTypeOf(lhs), 0);
-		v = LLVMBuildBinOp(builder, iops[opcode], lhs, rhs, "");
+	// Two pointers: p - q
+	if (is_pointer_type(lhs_type) && is_pointer_type(rhs_type)) {
+		assert(opcode == OP_SUB);
+		assert(is_integer_type(type, bits_in_pointer));
+		lhs = build_ptrtoint(builder, lhs);
+		rhs = build_ptrtoint(builder, rhs);
+		return LLVMBuildBinOp(builder, LLVMSub, lhs, rhs, "");
+	}
+
+	// One pointer, one integer: p + n, n + p, p - n
+	if (is_pointer_type(lhs_type) || is_pointer_type(rhs_type)) {
 		switch (opcode) {
-		default: break;
-		case OP_ADD: case OP_SUB:
-			if (!(ctype->ctype.modifiers & MOD_SIGNED))
-				break;
-			// Fall through.
-		case OP_MULS: case OP_SHL:
-			set_no_signed_wrap(v);
+		default: assert(0 && "Unknown pointer operation!");
+		case OP_ADD:
+			// Change n + p to p + n.
+			if (is_pointer_type(rhs_type)) {
+				swap(lhs, rhs);
+				swap(lhs_type, rhs_type);
+			}
+			break;
+		case OP_SUB:
+			rhs = LLVMBuildNeg(builder, rhs, "");
 			break;
 		}
-		return v;
+		assert(is_pointer_type(lhs_type));
+		assert(is_integer_type(rhs_type, 0));
+		assert(is_pointer_type(type));
+		lhs = build_pointer_cast(builder, lhs, type);
+		return build_gep(builder, lhs, rhs);
 	}
+
+	// Two integers.
+	assert(is_integer_type(lhs_type, 0));
+	assert(is_integer_type(rhs_type, 0));
+	// For x << y, y may not be the same type of x.
+	// Truncate or zero-extend y.
+	rhs = build_integer_cast(builder, rhs, LLVMTypeOf(lhs), 0);
+	v = LLVMBuildBinOp(builder, iops[opcode], lhs, rhs, "");
+	switch (opcode) {
+	default: break;
+	case OP_ADD: case OP_SUB:
+		if (!(ctype->ctype.modifiers & MOD_SIGNED))
+			break;
+		// Fall through.
+	case OP_MULS: case OP_SHL:
+		set_no_signed_wrap(v);
+		break;
+	}
+	return v;
 }
 
 static value_t emit_cmp(builder_t builder, struct instruction *insn)
@@ -294,22 +307,21 @@ static value_t emit_select(builder_t builder, struct instruction *insn)
 	return LLVMBuildSelect(builder, cond, true_val, false_val, "");
 }
 
-static value_t emit_gep(builder_t builder, struct pseudo *src, unsigned int offset, type_t type)
+static value_t emit_gep_access(builder_t builder, struct pseudo *src, unsigned int offset, type_t elem_type)
 {
 	value_t ptr = emit_pseudo(src);
-	unsigned as = LLVMGetPointerAddressSpace(LLVMTypeOf(ptr));
-	type_t bytep = LLVMPointerType(LLVMInt8Type(), as);
-	value_t base = build_pointer_cast(builder, ptr, bytep);
+	unsigned int as = LLVMGetPointerAddressSpace(LLVMTypeOf(ptr));
+	type_t type = LLVMPointerType(elem_type, as);
+	value_t base = build_pointer_cast(builder, ptr, type);
 	value_t idx = LLVMConstInt(LLVMIntType(bits_in_pointer), offset, 0);
-	value_t gep = LLVMBuildGEP(builder, base, &idx, 1, "");
 
-	return build_pointer_cast(builder, gep, LLVMPointerType(type, as));
+	return build_gep(builder, base, idx);
 }
 
 static value_t emit_load(builder_t builder, struct instruction *insn)
 {
 	type_t type = emit_type(insn->target->ctype);
-	value_t ptr = emit_gep(builder, insn->src, insn->offset, type);
+	value_t ptr = emit_gep_access(builder, insn->src, insn->offset, type);
 
 	return LLVMBuildLoad(builder, ptr, "");
 }
@@ -320,7 +332,7 @@ static void emit_store(builder_t builder, struct instruction *insn)
 	// The type could be different from emit_type(insn->target->ctype),
 	// for example, given str = "".
 	type_t type = LLVMTypeOf(v);
-	value_t ptr = emit_gep(builder, insn->src, insn->offset, type);
+	value_t ptr = emit_gep_access(builder, insn->src, insn->offset, type);
 
 	LLVMBuildStore(builder, v, ptr);
 }
