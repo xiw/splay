@@ -1,4 +1,5 @@
 #include "lib.h"
+#include "sparse/expression.h"
 #include "sparse/linearize.h"
 #include <assert.h>
 #include <string.h>
@@ -32,11 +33,24 @@ static void complete_pseudo(struct pseudo *pseudo, value_t v)
 
 static value_t emit_symbol(struct symbol *sym)
 {
+	type_t type;
+
 	if (sym->ctype.modifiers & (MOD_TOPLEVEL | MOD_STATIC))
 		return emit_toplevel(LLVMGetGlobalParent(function), sym);
 	if (sym->aux)
 		return sym->aux;
-	sym->aux = alloc_alloca(emit_type(sym), function);
+
+	type = emit_type(sym);
+	// Fix array size arr[] = {...}.
+	if (sym->initializer) {
+		if (is_array_type(type) && LLVMGetArrayLength(type) == 0) {
+			int n = expression_list_size(sym->initializer->expr_list);
+
+			type = LLVMArrayType(LLVMGetElementType(type), n);
+		}
+	}
+
+	sym->aux = alloc_alloca(type, function);
 	return sym->aux;
 }
 
