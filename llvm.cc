@@ -119,7 +119,10 @@ int is_floating_point_type(type_t type)
 
 type_t get_function_type(value_t v)
 {
-	return llvm::wrap(llvm::unwrap<llvm::Function>(v)->getFunctionType());
+	llvm::PointerType *ty = llvm::unwrap<llvm::PointerType>(LLVMTypeOf(v));
+	llvm::FunctionType *functy = llvm::cast<llvm::FunctionType>(ty->getElementType());
+
+	return llvm::wrap(functy);
 }
 
 value_t alloc_alloca(type_t type, value_t func)
