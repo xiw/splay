@@ -7,16 +7,23 @@
 
 static value_t emit_function_declaration(module_t m, struct symbol *sym)
 {
+	const char *ident = show_ident(sym->ident);
 	struct symbol *base_type = sym->ctype.base_type;
 	type_t type;
 	value_t func;
 	struct symbol *arg;
 	int i;
 
+	// A function symbol called in another function is different from
+	// the symbol of its definition.
+	func = LLVMGetNamedFunction(m, ident);
+	if (func)
+		return func;
+
 	assert(sym->type == SYM_NODE);
 	assert(is_function(base_type));
 	type = emit_type(base_type);
-	func = LLVMAddFunction(m, show_ident(sym->ident), type);
+	func = LLVMAddFunction(m, ident, type);
 
 	// Set argument names.
 	i = 0;
