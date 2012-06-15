@@ -1,5 +1,6 @@
 #include "lib.h"
 #include "sparse/expression.h"
+#include "sparse/flow.h"
 #include "sparse/linearize.h"
 #include <assert.h>
 #include <string.h>
@@ -364,11 +365,10 @@ static value_t emit_phi(builder_t builder, struct instruction *insn)
 
 static void emit_phisrc(builder_t builder, struct instruction *insn)
 {
-	struct pseudo_user *pu;
+	struct instruction *phi;
 	value_t v = emit_pseudo(insn->phi_src);
 
-	FOR_EACH_PTR(insn->target->users, pu) {
-		struct instruction *phi = pu->insn;
+	FOR_EACH_PTR(insn->phi_users, phi) {
 		struct pseudo *target = phi->target;
 		value_t ptr;
 
@@ -380,7 +380,7 @@ static void emit_phisrc(builder_t builder, struct instruction *insn)
 		// Extract address from load.
 		ptr = LLVMGetOperand(target->priv, 0);
 		LLVMBuildStore(builder, v, ptr);
-	} END_FOR_EACH_PTR(pu);
+	} END_FOR_EACH_PTR(phi);
 }
 
 static value_t emit_cast(builder_t builder, struct instruction *insn)
@@ -499,8 +499,15 @@ void emit_function(module_t m, struct entrypoint *ep)
 	// Emit empty basic blocks first.
 	FOR_EACH_PTR(ep->bbs, bb) {
 		const char *name = (bb == ep->entry->bb) ? "entry" : "bb";
+		struct instruction *insn;
 
 		blockof(bb) = LLVMAppendBasicBlock(function, name);
+		// Fill in ->phi_users.
+		FOR_EACH_PTR(bb->insns, insn) {
+			if (insn->bb && insn->opcode == OP_PHI)
+				track_phi_uses(insn);
+		} END_FOR_EACH_PTR(insn);
+
 	} END_FOR_EACH_PTR(bb);
 
 	// Emit instructions.
