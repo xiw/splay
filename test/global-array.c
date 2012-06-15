@@ -21,6 +21,6 @@ char str_less[1] = "abc";
 // CHECK: @str_more = global [5 x i8] c"abc\00\00"
 char str_more[5] = "abc";
 
-// CHECK: @[[VERSION:.*]] = internal global [4 x i8] c"3.0\00"
-// CHECK: @version = global i8* getelementptr inbounds ([4 x i8]* @[[VERSION]], i32 0, i32 0)
+// CHECK: @version = global i8* getelementptr inbounds ([4 x i8]* @[[VERSION:.*]], i32 0, i32 0)
+// CHECK: @[[VERSION]] = internal global [4 x i8] c"3.0\00"
 char *version = "3.0";

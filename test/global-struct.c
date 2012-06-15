@@ -32,3 +32,9 @@ struct A ga1 = {1, {2, 3}};
 
 // CHECK: @ga2 = global %struct.A { i32 1, %struct.{{.*}} zeroinitializer }
 struct A ga2 = {1};
+
+struct B {
+	struct B *next;
+};
+
+struct B self = {.next = &self};

@@ -41,15 +41,6 @@ static value_t emit_symbol(struct symbol *sym)
 		return sym->aux;
 
 	type = emit_type(sym);
-	// Fix array size arr[] = {...}.
-	if (sym->initializer) {
-		if (is_array_type(type) && LLVMGetArrayLength(type) == 0) {
-			int n = expression_list_size(sym->initializer->expr_list);
-
-			type = LLVMArrayType(LLVMGetElementType(type), n);
-		}
-	}
-
 	sym->aux = alloc_alloca(type, function);
 	return sym->aux;
 }

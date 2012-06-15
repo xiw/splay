@@ -167,30 +167,14 @@ static value_t array_to_pointer(value_t v)
 
 static value_t emit_global_variable(module_t m, struct symbol *sym)
 {
-	type_t type = emit_type(sym), orig_type = type;
-	value_t v, initializer = NULL;
+	type_t type = emit_type(sym);
+	value_t v, initializer;
 
 	assert(sym->type == SYM_NODE);
-
-	if (sym->initializer) {
-		initializer = emit_constant(m, sym->initializer);
-		orig_type = LLVMTypeOf(initializer);
-		if (type != orig_type) {
-			if (is_array_type(type)) {
-				unsigned int size, orig_size;
-
-				assert(is_array_type(orig_type));
-				size = LLVMGetArrayLength(type);
-				orig_size = LLVMGetArrayLength(orig_type);
-				assert(size != orig_size);
-				if (size == 0)
-					type = orig_type;
-			}
-		}
-	}
-
 	v = LLVMAddGlobal(m, type, sym->ident ? show_ident(sym->ident) : "");
-	sym->aux = v;
+	// Set the value temporarily to avoid recursion when emitting
+	// initializer.  Convert array type to pointer.
+	sym->aux = is_array_type(type) ? array_to_pointer(v) : v;
 
 	// Set attributes.
 	if (sym->ctype.alignment)
@@ -210,23 +194,24 @@ static value_t emit_global_variable(module_t m, struct symbol *sym)
 
 	// External declaration, no initializer.
 	if (sym->ctype.modifiers & MOD_EXTERN) {
-		assert(!initializer);
-		return v;
+		assert(!sym->initializer);
+		return sym->aux;
 	}
 
-	if (!initializer) {
+	if (!sym->initializer) {
 		initializer = LLVMConstNull(type);
-	} else if (is_array_type(type)) {
-		unsigned int size = LLVMGetArrayLength(type);
+	} else {
+		initializer = emit_constant(m, sym->initializer);
+		// Reset array size: fill in zeros or truncate the values.
+		if (is_array_type(type)) {
+			unsigned int size = LLVMGetArrayLength(type);
 
-		// Reset array size.
-		if (size != LLVMGetArrayLength(orig_type))
-			initializer = resize_constant_array(initializer, size);
-		
+			if (size != LLVMGetArrayLength(LLVMTypeOf(initializer)))
+				initializer = resize_constant_array(initializer, size);
+		}
 	}
 	LLVMSetInitializer(v, initializer);
-	// Convert array type to pointer.
-	return is_array_type(type) ? array_to_pointer(v) : v;
+	return sym->aux;
 }
 
 value_t emit_toplevel(module_t m, struct symbol *sym)

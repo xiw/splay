@@ -120,7 +120,7 @@ static void emit_type_end(struct symbol *sym, type_t type)
 	}
 }
 
-type_t emit_type(struct symbol *sym)
+static type_t emit_raw_type(struct symbol *sym)
 {
 	type_t type;
 
@@ -132,5 +132,25 @@ type_t emit_type(struct symbol *sym)
 	type = emit_type_begin(sym);
 	sym->aux = type;
 	emit_type_end(sym, type);
+	return type;
+}
+
+type_t emit_type(struct symbol *sym)
+{
+	type_t type = emit_raw_type(sym);
+
+	// Fix array type arr[] = {...}.
+	if (is_array_type(type) && LLVMGetArrayLength(type) == 0 && sym->initializer) {
+		struct expression *expr = sym->initializer;
+		int n = 0;
+
+		if (expr->ctype->array_size)
+			n = get_expression_value(expr->ctype->array_size);
+		if (!n && expr->type == EXPR_INITIALIZER)
+			n = expression_list_size(expr->expr_list);
+		if (n)
+			type = LLVMArrayType(LLVMGetElementType(type), n);
+	}
+
 	return type;
 }
