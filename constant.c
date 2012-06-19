@@ -34,7 +34,14 @@ static value_t emit_function_declaration(module_t m, struct symbol *sym)
 		++i;
 	} END_FOR_EACH_PTR(arg);
 
-	// TODO: set attributes.
+	// Set attributes.
+	if (sym->ctype.modifiers & MOD_NORETURN)
+		LLVMAddFunctionAttr(func, LLVMNoReturnAttribute);
+	// sparse doesn't distinguish const from pure.
+	if (sym->ctype.modifiers & MOD_PURE)
+		LLVMAddFunctionAttr(func, LLVMReadOnlyAttribute);
+	if (sym->ctype.modifiers & MOD_STATIC)
+		LLVMSetLinkage(func, LLVMInternalLinkage);
 	return func;
 }
 
