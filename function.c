@@ -478,6 +478,8 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_PTRCAST:
 		return emit_cast(builder, insn);
 	case OP_INLINED_CALL:
+		// Ignore, already inlined.
+		break;
 	case OP_CALL:
 		return emit_call(builder, insn);
 	}
