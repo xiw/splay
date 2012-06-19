@@ -8,14 +8,17 @@
 #include <llvm/DerivedTypes.h>
 #include <llvm/Function.h>
 #include <llvm/Instructions.h>
+#include <llvm/Pass.h>
+#include <llvm/PassManager.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/Triple.h>
+#include <llvm/Analysis/Dominators.h>
 #include <llvm/Analysis/Verifier.h>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/InstIterator.h>
 #include <llvm/Support/IntegersSubset.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Transforms/Utils/SSAUpdater.h>
 #include <assert.h>
 
 // Forward declarations in sparse/lib.h.
@@ -224,4 +227,60 @@ void add_switch_cases(value_t v, long long begin, long long end, block_t blk)
 	llvm::IntegersSubset vals(llvm::makeArrayRef(range));
 
 	i->addCase(vals, llvm::unwrap(blk));
+}
+
+namespace {
+
+struct FixUndef : llvm::FunctionPass {
+	static char ID;
+	FixUndef() : llvm::FunctionPass(ID) {
+		llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
+		llvm::initializeDominatorTreePass(Registry);
+	}
+	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+		AU.setPreservesCFG();
+		AU.addRequired<llvm::DominatorTree>();
+	}
+	virtual bool runOnFunction(llvm::Function &F) {
+		llvm::DominatorTree &DT = getAnalysis<llvm::DominatorTree>();
+		bool Changed = false;
+		for (llvm::inst_iterator i = inst_begin(F), e = inst_end(F); i != e; ) {
+			llvm::Instruction &I = *i++;
+			for (unsigned int k = 0, n = I.getNumOperands(); k != n; ++k) {
+				const llvm::Use &Use = I.getOperandUse(k);
+				llvm::Instruction *Def = llvm::dyn_cast<llvm::Instruction>(Use.get());
+				if (!Def)
+					continue;
+				if (DT.dominates(Def, Use))
+					continue;
+				fix(Def);
+				Changed = true;
+			}
+		}
+		return Changed;
+	}
+private:
+	void fix(llvm::Instruction *I) {
+		llvm::Function *F = I->getParent()->getParent();
+		llvm::Value *V = llvm::unwrap(alloc_alloca(llvm::wrap(I->getType()), llvm::wrap(F)));
+		for (llvm::Instruction::use_iterator i = I->use_begin(), e = I->use_end(); i != e; ++i) {
+			llvm::Use &U = i.getUse();
+			llvm::Instruction *IP = llvm::cast<llvm::Instruction>(U.getUser());
+			U.set(new llvm::LoadInst(V, "", IP));
+		}
+		llvm::Instruction *NewInst = new llvm::StoreInst(I, V);
+		NewInst->insertAfter(I);
+	}
+};
+
+} // anonymous namespace
+
+char FixUndef::ID;
+
+void fix_undef(value_t func)
+{
+	llvm::Function *f = llvm::unwrap<llvm::Function>(func);
+	llvm::FunctionPassManager fpm(f->getParent());
+	fpm.add(new FixUndef);
+	fpm.run(*f);
 }

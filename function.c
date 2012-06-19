@@ -532,5 +532,7 @@ void emit_function(module_t m, struct entrypoint *ep)
 	} END_FOR_EACH_PTR(bb);
 	LLVMDisposeBuilder(builder);
 
+	fix_undef(function);
+
 	function = NULL;
 }

@@ -90,6 +90,8 @@ value_t build_gep(builder_t builder, value_t base, value_t offset);
 
 void add_switch_cases(value_t v, long long begin, long long end, block_t blk);
 
+void fix_undef(value_t func);
+
 #ifdef __cplusplus
 }
 #endif
