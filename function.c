@@ -387,7 +387,7 @@ static value_t emit_cast(builder_t builder, struct instruction *insn)
 {
 	value_t src = emit_pseudo(insn->src);
 	type_t orig_type, type;
-	value_t v;
+	int is_signed = (insn->opcode == OP_SCAST);
 
 	// Converting to _Bool needs a zero test rather than a truncation.
 	if (is_bool_type(insn->target->ctype))
@@ -400,11 +400,15 @@ static value_t emit_cast(builder_t builder, struct instruction *insn)
 			return build_pointer_cast(builder, src, type);
 		return build_inttoptr(builder, src, type);
 	}
+	if (is_floating_point_type(type)) {
+		if (is_signed)
+			return LLVMBuildSIToFP(builder, src, type, "");
+		else
+			return LLVMBuildUIToFP(builder, src, type, "");
+	}
 	if (is_pointer_type(orig_type))
-		v = build_ptrtoint(builder, src);
-	else
-		v = src;
-	return build_integer_cast(builder, v, type, insn->opcode == OP_SCAST);
+		src = build_ptrtoint(builder, src);
+	return build_integer_cast(builder, src, type, is_signed);
 }
 
 static LLVMValueRef emit_call(builder_t builder, struct instruction *insn)
