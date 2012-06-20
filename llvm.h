@@ -25,6 +25,10 @@ void verify_module(module_t m);
 
 void print_module(module_t m, int fd);
 
+void dump_value(value_t v);
+
+void dump_type(type_t type);
+
 static inline int is_array_type(type_t type)
 {
 	return LLVMGetTypeKind(type) == LLVMArrayTypeKind;

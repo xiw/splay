@@ -48,6 +48,7 @@ static value_t emit_function_declaration(module_t m, struct symbol *sym)
 static value_t emit_subexpr(module_t m, struct expression *expr)
 {
 	struct expression *subexpr;
+	value_t v;
 
 	switch (expr->type) {
 	default: assert(0 && "Unknown initializer expression!");
@@ -58,7 +59,16 @@ static value_t emit_subexpr(module_t m, struct expression *expr)
 		subexpr = expr;
 		break;
 	}
-	return emit_constant(m, subexpr);
+	v = emit_constant(m, subexpr);
+	// If the subexpression is an array, fix its size.
+	//   char s[][4] = {"a", "bc", "def"};
+	if (is_array_type(LLVMTypeOf(v))) {
+		type_t type = emit_type(expr->ctype);
+		unsigned size = LLVMGetArrayLength(type);
+
+		v = resize_constant_array(v, size);
+	}
+	return v;
 }
 
 static value_t emit_array(module_t m, struct expression *expr)
@@ -219,8 +229,7 @@ static value_t emit_global_variable(module_t m, struct symbol *sym)
 		if (is_array_type(type)) {
 			unsigned int size = LLVMGetArrayLength(type);
 
-			if (size != LLVMGetArrayLength(LLVMTypeOf(initializer)))
-				initializer = resize_constant_array(initializer, size);
+			initializer = resize_constant_array(initializer, size);
 		}
 	}
 	LLVMSetInitializer(v, initializer);

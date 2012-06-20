@@ -106,6 +106,16 @@ void print_module(module_t m, int fd)
 	llvm::unwrap(m)->print(os, NULL);
 }
 
+void dump_value(value_t v)
+{
+	llvm::unwrap(v)->dump();
+}
+
+void dump_type(type_t type)
+{
+	llvm::unwrap(type)->dump();
+}
+
 int is_integer_type(type_t type, unsigned nbits)
 {
 	llvm::Type *ty = llvm::unwrap(type);
@@ -184,10 +194,15 @@ value_t resize_constant_array(value_t v, unsigned int size)
 	llvm::Constant *c = llvm::unwrap<llvm::Constant>(v);
 	llvm::ArrayType *ty = llvm::cast<llvm::ArrayType>(c->getType());
 	unsigned int n = ty->getNumElements(), i;
-	llvm::SmallVector<llvm::Constant *, 16> elems(n);
-	llvm::Type *elemty = ty->getElementType();
-	llvm::Constant *zero = llvm::Constant::getNullValue(elemty);
+	llvm::SmallVector<llvm::Constant *, 16> elems;
+	llvm::Type *elemty;
+	llvm::Constant *zero;
 
+	if (n == size)
+		return v;
+	elems.resize(n);
+	elemty = ty->getElementType();
+	zero = llvm::Constant::getNullValue(elemty);
 	for (i = 0; i != n; ++i)
 		elems[i] = c->getAggregateElement(i);
 	elems.resize(size, zero);

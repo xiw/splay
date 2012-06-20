@@ -24,3 +24,6 @@ char str_more[5] = "abc";
 // CHECK: @version = global i8* getelementptr inbounds ([4 x i8]* @[[VERSION:.*]], i32 0, i32 0)
 // CHECK: @[[VERSION]] = internal global [4 x i8] c"3.0\00"
 char *version = "3.0";
+
+// CHECK: @letters = global [3 x [4 x i8]] [{{.*}}[4 x i8] c"a\00\00\00", [4 x i8] c"bc\00\00", [4 x i8] c"def\00"]
+char letters[][4] = {"a", "bc", "def"};
