@@ -80,15 +80,9 @@ static inline value_t build_inttoptr(builder_t builder, value_t src, type_t type
 	return LLVMBuildIntToPtr(builder, src, type, "");
 }
 
-static inline value_t build_is_null(builder_t builder, value_t v)
-{
-	return LLVMBuildIsNull(builder, v, "");
-}
+value_t build_is_null(builder_t builder, value_t v);
 
-static inline value_t build_is_not_null(builder_t builder, value_t v)
-{
-	return LLVMBuildIsNotNull(builder, v, "");
-}
+value_t build_is_not_null(builder_t builder, value_t v);
 
 value_t build_gep(builder_t builder, value_t base, value_t offset);
 

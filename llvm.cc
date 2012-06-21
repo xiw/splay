@@ -215,6 +215,44 @@ value_t build_integer_cast(builder_t builder, value_t src, type_t type, int is_s
 		llvm::unwrap(src), llvm::unwrap(type), is_signed, ""));
 }
 
+// LLVMBuildIs[Not]Null doesn't deal with floating point types,
+// so we write our own version.  Also avoid emitting redundant
+// conversion given a bool value.
+
+value_t build_is_null(builder_t builder, value_t v)
+{
+	llvm::Value *arg = llvm::unwrap(v);
+	llvm::Type *ty = arg->getType();
+	llvm::Constant *zero;
+	llvm::Value *cmp;
+
+	if (ty->isIntegerTy(1))
+		return v;
+	zero = llvm::Constant::getNullValue(ty);
+	if (ty->isFloatingPointTy())
+		cmp = llvm::unwrap(builder)->CreateFCmpUEQ(arg, zero, "");
+	else
+		cmp = llvm::unwrap(builder)->CreateICmpEQ(arg, zero, "");
+	return llvm::wrap(cmp);
+}
+
+value_t build_is_not_null(builder_t builder, value_t v)
+{
+	llvm::Value *arg = llvm::unwrap(v);
+	llvm::Type *ty = arg->getType();
+	llvm::Constant *zero;
+	llvm::Value *cmp;
+
+	if (ty->isIntegerTy(1))
+		return v;
+	zero = llvm::Constant::getNullValue(ty);
+	if (ty->isFloatingPointTy())
+		cmp = llvm::unwrap(builder)->CreateFCmpUNE(arg, zero, "");
+	else
+		cmp = llvm::unwrap(builder)->CreateICmpNE(arg, zero, "");
+	return llvm::wrap(cmp);
+}
+
 value_t build_gep(builder_t builder, value_t base, value_t offset)
 {
 	type_t type = LLVMTypeOf(base);
