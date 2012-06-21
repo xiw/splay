@@ -211,8 +211,8 @@ static value_t emit_binop(builder_t builder, struct instruction *insn)
 	if (is_pointer_type(lhs_type) && is_pointer_type(rhs_type)) {
 		assert(opcode == OP_SUB);
 		assert(is_integer_type(type, bits_in_pointer));
-		lhs = build_ptrtoint(builder, lhs);
-		rhs = build_ptrtoint(builder, rhs);
+		lhs = build_ptrtoint(builder, lhs, type);
+		rhs = build_ptrtoint(builder, rhs, type);
 		return LLVMBuildBinOp(builder, LLVMSub, lhs, rhs, "");
 	}
 
@@ -383,32 +383,95 @@ static void emit_phisrc(builder_t builder, struct instruction *insn)
 	} END_FOR_EACH_PTR(phi);
 }
 
+static value_t emit_icast(builder_t builder, value_t v, type_t to, int is_signed)
+{
+	assert(is_integer_type(LLVMTypeOf(v), 0));
+
+	// int => int.
+	if (is_integer_type(to, 0))
+		return build_integer_cast(builder, v, to, is_signed);
+
+	// int => ptr.
+	if (is_pointer_type(to)) {
+		// Cast to integer of the pointer size first.
+		v = build_integer_cast(builder, v, LLVMIntType(bits_in_pointer), is_signed);
+		return build_inttoptr(builder, v, to);
+	}
+
+	// int => fp.
+	if (is_floating_point_type(to)) {
+		if (is_signed)
+			return LLVMBuildSIToFP(builder, v, to, "");
+		else
+			return LLVMBuildUIToFP(builder, v, to, "");
+	}
+
+	assert(0 && "Unknown icast!");
+}
+
+static value_t emit_ptrcast(builder_t builder, value_t v, type_t to)
+{
+	assert(is_pointer_type(LLVMTypeOf(v)));
+
+	// ptr => int.
+	if (is_integer_type(to, 0))
+		return build_ptrtoint(builder, v, to);
+
+	// ptr => ptr.
+	if (is_pointer_type(to))
+		return build_pointer_cast(builder, v, to);
+
+	assert(0 && "Unknown ptrcast!");
+}
+
+static value_t emit_fpcast(builder_t builder, value_t v, type_t to, int is_signed)
+{
+	assert(is_floating_point_type(LLVMTypeOf(v)));
+
+	// fp => int.
+	if (is_integer_type(to, 0)) {
+		if (is_signed)
+			return LLVMBuildFPToSI(builder, v, to, "");
+		else
+			return LLVMBuildFPToUI(builder, v, to, "");
+	}
+
+	// fp => fp.
+	if (is_floating_point_type(to))
+		return build_floating_point_cast(builder, v, to);
+
+	assert(0 && "Unknown fpcast!");
+}
+
+static int is_signed(struct symbol *sym)
+{
+	return sym->ctype.modifiers & MOD_SIGNED;
+}
+
+// Don't trust sparse's [s|fp|ptr]cast.  For example, converting from
+// void* doesn't count as ptrcast.
 static value_t emit_cast(builder_t builder, struct instruction *insn)
 {
-	value_t src = emit_pseudo(insn->src);
-	type_t orig_type, type;
-	int is_signed = (insn->opcode == OP_SCAST);
+	value_t v = emit_pseudo(insn->src);
+	type_t from, to;
 
-	// Converting to _Bool needs a zero test rather than a truncation.
+	// Converting to bool needs a zero test rather than a truncation.
 	if (is_bool_type(insn->target->ctype))
-		return build_is_not_null(builder, src);
+		return build_is_not_null(builder, v);
 
-	orig_type = LLVMTypeOf(src);
-	type = emit_type(insn->target->ctype);
-	if (is_pointer_type(type)) {
-		if (is_pointer_type(orig_type))
-			return build_pointer_cast(builder, src, type);
-		return build_inttoptr(builder, src, type);
-	}
-	if (is_floating_point_type(type)) {
-		if (is_signed)
-			return LLVMBuildSIToFP(builder, src, type, "");
-		else
-			return LLVMBuildUIToFP(builder, src, type, "");
-	}
-	if (is_pointer_type(orig_type))
-		src = build_ptrtoint(builder, src);
-	return build_integer_cast(builder, src, type, is_signed);
+	from = LLVMTypeOf(v);
+	to = emit_type(insn->target->ctype);
+
+	if (is_integer_type(from, 0))
+		return emit_icast(builder, v, to, is_signed(insn->src->ctype));
+
+	if (is_pointer_type(from))
+		return emit_ptrcast(builder, v, to);
+
+	if (is_floating_point_type(from))
+		return emit_fpcast(builder, v, to, is_signed(insn->target->ctype));
+
+	assert(0 && "Unknown cast!");
 }
 
 static LLVMValueRef emit_call(builder_t builder, struct instruction *insn)
@@ -479,6 +542,7 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 		break;
 	case OP_CAST:
 	case OP_SCAST:
+	case OP_FPCAST:
 	case OP_PTRCAST:
 		return emit_cast(builder, insn);
 	case OP_INLINED_CALL:

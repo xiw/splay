@@ -65,14 +65,19 @@ value_t resize_constant_array(value_t v, unsigned int size);
 
 value_t build_integer_cast(builder_t builder, value_t src, type_t type, int is_signed);
 
+static inline value_t build_floating_point_cast(builder_t builder, value_t src, type_t type)
+{
+	return LLVMBuildFPCast(builder, src, type, "");
+}
+
 static inline value_t build_pointer_cast(builder_t builder, value_t src, type_t type)
 {
 	return LLVMBuildPointerCast(builder, src, type, "");
 }
 
-static inline value_t build_ptrtoint(builder_t builder, value_t src)
+static inline value_t build_ptrtoint(builder_t builder, value_t src, type_t type)
 {
-	return LLVMBuildPtrToInt(builder, src, LLVMIntType(bits_in_pointer), "");
+	return LLVMBuildPtrToInt(builder, src, type, "");
 }
 
 static inline value_t build_inttoptr(builder_t builder, value_t src, type_t type)
