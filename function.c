@@ -303,6 +303,16 @@ static value_t emit_cmp(builder_t builder, struct instruction *insn)
 		return LLVMBuildICmp(builder, iops[opcode], lhs, rhs, "");
 }
 
+static value_t emit_neg(builder_t builder, struct instruction *insn)
+{
+	value_t v = emit_pseudo(insn->src1);
+	type_t type = LLVMTypeOf(v);
+
+	if (is_floating_point_type(type))
+		return LLVMBuildFNeg(builder, v, "");
+	return LLVMBuildNeg(builder, v, "");
+}
+
 static value_t emit_select(builder_t builder, struct instruction *insn)
 {
 	value_t cond, true_val, false_val;
@@ -525,7 +535,7 @@ static value_t emit_instruction(builder_t builder, struct instruction *insn)
 	case OP_NOT:
 		return LLVMBuildNot(builder, emit_pseudo(insn->src1), "");
 	case OP_NEG:
-		return LLVMBuildNeg(builder, emit_pseudo(insn->src1), "");
+		return emit_neg(builder, insn);
 	case OP_SEL:
 		return emit_select(builder, insn);
 	case OP_LOAD:
