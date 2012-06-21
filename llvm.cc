@@ -298,15 +298,19 @@ struct FixUndef : llvm::FunctionPass {
 		llvm::DominatorTree &DT = getAnalysis<llvm::DominatorTree>();
 		bool Changed = false;
 		for (llvm::inst_iterator i = inst_begin(F), e = inst_end(F); i != e; ) {
-			llvm::Instruction &I = *i++;
-			for (unsigned int k = 0, n = I.getNumOperands(); k != n; ++k) {
-				const llvm::Use &Use = I.getOperandUse(k);
-				llvm::Instruction *Def = llvm::dyn_cast<llvm::Instruction>(Use.get());
-				if (!Def)
-					continue;
-				if (DT.dominates(Def, Use))
-					continue;
-				fix(Def);
+			llvm::Instruction *I = &*i++;
+			llvm::Instruction::use_iterator ui, ue;
+			bool dominated = true;
+
+			for (ui = I->use_begin(), ue = I->use_end(); ui != ue; ++ui) {
+				if (!DT.dominates(I, ui.getUse())) {
+					dominated = false;
+					break;
+				}
+			}
+			// Def doesn't dominate some use.
+			if (!dominated) {
+				fix(I);
 				Changed = true;
 			}
 		}
@@ -316,8 +320,8 @@ private:
 	void fix(llvm::Instruction *I) {
 		llvm::Function *F = I->getParent()->getParent();
 		llvm::Value *V = llvm::unwrap(alloc_alloca(llvm::wrap(I->getType()), llvm::wrap(F)));
-		for (llvm::Instruction::use_iterator i = I->use_begin(), e = I->use_end(); i != e; ++i) {
-			llvm::Use &U = i.getUse();
+		while (!I->use_empty()) {
+			llvm::Use &U = I->use_begin().getUse();
 			llvm::Instruction *IP = llvm::cast<llvm::Instruction>(U.getUser());
 			U.set(new llvm::LoadInst(V, "", IP));
 		}
@@ -334,6 +338,7 @@ void fix_undef(value_t func)
 {
 	llvm::Function *f = llvm::unwrap<llvm::Function>(func);
 	llvm::FunctionPassManager fpm(f->getParent());
+
 	fpm.add(new FixUndef);
 	fpm.run(*f);
 }
