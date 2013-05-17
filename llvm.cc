@@ -3,11 +3,6 @@
  * It is written in C++ and cannot include sparse headers.
  */
 #include "llvm.h"
-#include <llvm/BasicBlock.h>
-#include <llvm/Constant.h>
-#include <llvm/DerivedTypes.h>
-#include <llvm/Function.h>
-#include <llvm/Instructions.h>
 #include <llvm/Pass.h>
 #include <llvm/PassManager.h>
 #include <llvm/ADT/APInt.h>
@@ -15,6 +10,13 @@
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/Dominators.h>
 #include <llvm/Analysis/Verifier.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constant.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/InstIterator.h>
 #include <llvm/Support/IntegersSubset.h>

@@ -25,7 +25,7 @@ PROGRAMS	= splay
 all: $(PROGRAMS)
 
 splay: splay.o constant.o function.o type.o llvm.o sparse/libsparse.a
-	$(QUIET_LINK)$(LD) $(LDFLAGS) -o $@ $^ `llvm-config --libs core analysis`
+	$(QUIET_LINK)$(LD) -o $@ $^ `llvm-config --libs core analysis` $(LDFLAGS)
 
 %.o: %.c
 	$(QUIET_CC)$(CC) -o $@ -c $(ALL_CFLAGS) $<
